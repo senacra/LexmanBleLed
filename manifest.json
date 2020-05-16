@@ -1,0 +1,8 @@
+{
+  "domain": "ble_light",
+  "name": "Bluetooth LE LED",
+  "documentation": "",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": []
+}
