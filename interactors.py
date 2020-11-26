@@ -1,3 +1,4 @@
+import abc
 import logging
 import subprocess
 
@@ -5,33 +6,45 @@ import subprocess
 LOGGER = logging.getLogger(__name__)
 
 
-class GATTToolRGBWInteractor(object):
-    executable = 'gatttool'
-    control_handle = '0x0007'
+class RGBWInteractor(abc.ABC):
+    control_handle = 0x0007
+    rgb_offsets = [5*8, 4*8, 3*8]
+    rgb_base = 0x5600000000f0aa
+    white_offset = 2*8
+    white_base = 0x56000000000faa
 
     def __init__(self, address):
         self.address = address
 
-    def write(self, handle, value):
+    @abc.abstractmethod
+    def _write(self, value):
+        raise NotImplemented
+
+    def set_on(self):
+        self.write(0xcc2333)
+
+    def set_off(self):
+        self.write(0xcc2433)
+
+    def set_color(self, *values):
+        self.write(self.rgb_base + sum(
+            v << o for v, o in zip(values, self.rgb_offsets)
+        ))
+
+    def set_white(self, value):
+        self.write(self.white_base + (value << self.white_offset))
+
+
+class GATTToolRGBWInteractor(RGBWInteractor):
+    executable = 'gatttool'
+
+    def _write(self, value):
         LOGGER.warning(f'Sending value {value}')
-        command = [self.executable, '-b', self.address, '--char-write-req', f'--handle={handle}', f'--value={value}']
+        command = [self.executable, '-b', self.address, '--char-write-req', f'--handle=0x{self.control_handle:04x}', f'--value={value:0x}']
+        LOGGER.warning(f'Command is: {command}')
         for n in range(5):
             try:
                 subprocess.run(command, capture_output=True, check=True)
                 break
             except subprocess.CalledProcessError as e:
-                LOGGER.warning(f'Command failed attempt {n} - {e}')
-
-
-    def set_on(self):
-        self.write(self.control_handle, 'cc2333')
-
-    def set_off(self):
-        self.write(self.control_handle, 'cc2433')
-
-    def set_color(self, red_value, green_value, blue_value):
-        self.write(self.control_handle, f'56{red_value:02x}{green_value:02x}{blue_value:02x}00f0aa')
-
-    def set_white(self, white_value):
-        self.write(self.control_handle, f'56000000{white_value:02x}0faa')
-
+                LOGGER.warning(f'Command failed attempt {n} - {e}\n{e.stdout}\n{e.stderr}')
