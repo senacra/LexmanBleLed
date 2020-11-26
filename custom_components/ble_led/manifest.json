@@ -1,8 +1,8 @@
 {
-  "domain": "ble_light",
-  "name": "Bluetooth LE LED",
+  "domain": "ble_led",
+  "name": "BLE LED Controller integration",
   "documentation": "",
   "dependencies": [],
-  "codeowners": [],
+  "codeowners": ["@nebulans"],
   "requirements": ["btlewrap==0.1.0"]
 }
