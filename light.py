@@ -3,7 +3,7 @@ import logging
 
 import voluptuous as vol
 
-from .interactors import GATTToolRGBWInteractor
+from .interactors import BtlewrapRGBWInteractor
 
 import homeassistant.helpers.config_validation as cv
 # Import the device class from the component that you want to support
@@ -37,7 +37,7 @@ class BleRGBWLight(Light):
 
     def __init__(self, address, name):
         self._address = address
-        self._interactor = GATTToolRGBWInteractor(address)
+        self._interactor = BtlewrapRGBWInteractor(address)
         self._name = name
         # TODO: can we interrogate device for state here?
         self._state = False

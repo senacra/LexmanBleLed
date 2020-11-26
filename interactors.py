@@ -1,7 +1,10 @@
 import abc
 import logging
+import math
 import subprocess
 
+from btlewrap.bluepy import BluepyBackend
+from btlewrap.base import BluetoothInterface
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,3 +51,18 @@ class GATTToolRGBWInteractor(RGBWInteractor):
                 break
             except subprocess.CalledProcessError as e:
                 LOGGER.warning(f'Command failed attempt {n} - {e}\n{e.stdout}\n{e.stderr}')
+
+
+class BtlewrapRGBWInteractor(RGBWInteractor):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.interface = BluetoothInterface(BluepyBackend)
+
+    def _pack(self, value):
+        num_bytes = math.ceil(value.bit_length() / 8)
+        return value.to_bytes(num_bytes, byteorder='big')
+
+    def _write(self, value):
+        with self.interface.connect(self.address) as connection:
+            connection.write_handle(self.control_handle, self._pack(value))
