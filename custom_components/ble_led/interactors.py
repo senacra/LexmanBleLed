@@ -24,18 +24,18 @@ class RGBWInteractor(abc.ABC):
         raise NotImplemented
 
     def set_on(self):
-        self.write(0xcc2333)
+        self._write(0xcc2333)
 
     def set_off(self):
-        self.write(0xcc2433)
+        self._write(0xcc2433)
 
     def set_color(self, *values):
-        self.write(self.rgb_base + sum(
+        self._write(self.rgb_base + sum(
             v << o for v, o in zip(values, self.rgb_offsets)
         ))
 
     def set_white(self, value):
-        self.write(self.white_base + (value << self.white_offset))
+        self._write(self.white_base + (value << self.white_offset))
 
 
 class GATTToolRGBWInteractor(RGBWInteractor):
