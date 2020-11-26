@@ -86,12 +86,10 @@ class BleRGBWLight(Light):
             self._hs_color = kwargs.get(ATTR_HS_COLOR, self._hs_color)
             rgb = color_util.color_hsv_to_RGB(*self._hs_color, self._brightness * 100 / 255)
             # TODO: support changing pixel order
-            LOGGER.warning(f'Sending RGB value {rgb}')
             self._interactor.set_color(*rgb)
 
         if ATTR_WHITE_VALUE in kwargs:
             self._white_value = kwargs.get(ATTR_WHITE_VALUE, self._white_value)
-            LOGGER.warning(f'Sending white value {self._white_value}')
             self._interactor.set_white(self._white_value)
 
     def turn_off(self, **kwargs):
