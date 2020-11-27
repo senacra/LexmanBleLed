@@ -4,9 +4,13 @@ import math
 import subprocess
 
 from btlewrap.bluepy import BluepyBackend
-from btlewrap.base import BluetoothInterface
+from btlewrap.base import BluetoothInterface, BluetoothBackendException
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ActionFailed(IOError):
+    pass
 
 
 class RGBWInteractor(abc.ABC):
@@ -54,6 +58,7 @@ class GATTToolRGBWInteractor(RGBWInteractor):
 
 
 class BtlewrapRGBWInteractor(RGBWInteractor):
+    max_attempts = 10
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -64,5 +69,16 @@ class BtlewrapRGBWInteractor(RGBWInteractor):
         return value.to_bytes(num_bytes, byteorder='big')
 
     def _write(self, value):
-        with self.interface.connect(self.address) as connection:
-            connection.write_handle(self.control_handle, self._pack(value))
+        error = None
+        for i in range(self.max_attempts):
+            try:
+                with self.interface.connect(self.address) as connection:
+                    connection.write_handle(self.control_handle, self._pack(value))
+                break
+            except BluetoothBackendException as e:
+                error = e
+        else:
+            LOGGER.error(f'Failed to write to bluetooth device after {i + 1} attempts')
+            raise error
+
+        LOGGER.warning(f'{i} failures before writing to bluetooth device - last error: {repr(error)}')
