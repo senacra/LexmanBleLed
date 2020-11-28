@@ -62,7 +62,7 @@ class BtlewrapRGBWInteractor(RGBWInteractor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.interface = BluetoothInterface(BluepyBackend)
+        self.interface = BluetoothInterface(BluepyBackend, address_type='random')
 
     def _pack(self, value):
         num_bytes = math.ceil(value.bit_length() / 8)
@@ -80,5 +80,5 @@ class BtlewrapRGBWInteractor(RGBWInteractor):
         else:
             LOGGER.error(f'Failed to write to bluetooth device after {i + 1} attempts')
             raise error
-
-        LOGGER.warning(f'{i} failures before writing to bluetooth device - last error: {repr(error)}')
+        if error:
+            LOGGER.warning(f'{i} failures before writing to bluetooth device - last error: {repr(error)}')
