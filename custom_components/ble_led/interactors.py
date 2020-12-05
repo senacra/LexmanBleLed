@@ -1,7 +1,9 @@
 import abc
 import logging
 import math
+import queue
 import subprocess
+import threading
 
 from btlewrap.bluepy import BluepyBackend
 from btlewrap.base import BluetoothInterface, BluetoothBackendException
@@ -57,28 +59,52 @@ class GATTToolRGBWInteractor(RGBWInteractor):
                 LOGGER.warning(f'Command failed attempt {n} - {e}\n{e.stdout}\n{e.stderr}')
 
 
+class BtlewrapWorker(threading.Thread):
+    """
+    Controllers appear to sometimes get into states where making a connection
+    can take an extremely large number of attempts.  Making keep-alive connections
+    without sending any data on a regular basis seems to mitigate this.
+    """
+
+    def __init__(self, address, keepalive_interval, attempts, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.address = address
+        self.keepalive_interval = keepalive_interval
+        self.attempts = attempts
+        self.interface = BluetoothInterface(BluepyBackend)
+        self.queue = queue.Queue()
+
+    def run(self):
+        while True:
+            try:
+                event = self.queue.get(timeout=self.keepalive_interval)
+            except queue.Empty:
+                event = None
+            self.write(event)
+
+    def write(self, event):
+        for i in range(self.attempts):
+            try:
+                with self.interface.connect(self.address) as connection:
+                    if event:
+                        connection.write_handle(*event)
+                break
+            except BluetoothBackendException:
+                pass
+        if i > 10:
+            LOGGER.warning(f'Bluetooth connection to {self.address} took {i + 1} attempts')
+
+
 class BtlewrapRGBWInteractor(RGBWInteractor):
-    max_attempts = 10
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.interface = BluetoothInterface(BluepyBackend, address_type='random')
+        self.worker = BtlewrapWorker(self.address, keepalive_interval=10, attempts=100, daemon=True)
+        self.worker.start()
 
     def _pack(self, value):
         num_bytes = math.ceil(value.bit_length() / 8)
         return value.to_bytes(num_bytes, byteorder='big')
 
     def _write(self, value):
-        error = None
-        for i in range(self.max_attempts):
-            try:
-                with self.interface.connect(self.address) as connection:
-                    connection.write_handle(self.control_handle, self._pack(value))
-                break
-            except BluetoothBackendException as e:
-                error = e
-        else:
-            LOGGER.error(f'Failed to write to bluetooth device after {i + 1} attempts')
-            raise error
-        if error:
-            LOGGER.warning(f'{i} failures before writing to bluetooth device - last error: {repr(error)}')
+        self.worker.queue.put((self.control_handle, self._pack(value)))
