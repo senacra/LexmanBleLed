@@ -3,6 +3,7 @@ import logging
 import math
 import queue
 import subprocess
+import time
 import threading
 
 from btlewrap.bluepy import BluepyBackend
@@ -73,24 +74,36 @@ class BtlewrapWorker(threading.Thread):
         self.attempts = attempts
         self.interface = BluetoothInterface(BluepyBackend)
         self.queue = queue.Queue()
+        self.failure_count = 0
+        self.success_count = 0
+        self.loop_count = 0
+        self.empty_count = 0
 
     def run(self):
         while True:
+            self.loop_count += 1
             try:
                 event = self.queue.get(timeout=self.keepalive_interval)
             except queue.Empty:
+                self.empty_count += 1
                 event = None
             self.write(event)
 
     def write(self, event):
         for i in range(self.attempts):
+            start = time.time()
             try:
                 with self.interface.connect(self.address) as connection:
                     if event:
                         connection.write_handle(*event)
+                self.success_count += 1
                 break
-            except BluetoothBackendException:
-                pass
+            except BluetoothBackendException as e:
+                LOGGER.info(f'Bluetooth connection failed: {e}')
+                self.failure_count += 1
+            elapsed = time.time() - start
+            if elapsed > 10:
+                LOGGER.info(f'Bluetooth connection took {elapsed}s')
         if i > 10:
             LOGGER.warning(f'Bluetooth connection to {self.address} took {i + 1} attempts')
 
@@ -99,7 +112,7 @@ class BtlewrapRGBWInteractor(RGBWInteractor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.worker = BtlewrapWorker(self.address, keepalive_interval=10, attempts=100, daemon=True)
+        self.worker = BtlewrapWorker(self.address, keepalive_interval=2, attempts=100, daemon=True)
         self.worker.start()
 
     def _pack(self, value):
@@ -107,4 +120,8 @@ class BtlewrapRGBWInteractor(RGBWInteractor):
         return value.to_bytes(num_bytes, byteorder='big')
 
     def _write(self, value):
+        if not self.worker.is_alive():
+            LOGGER.error(f'Worker for {self.address} is not alive!')
+        LOGGER.info(f'Submitting to worker for {self.address}, queue length {self.worker.queue.qsize()}')
+        LOGGER.info(f'Worker for {self.address}: {self.worker.loop_count} iterations, {self.worker.failure_count} failures')
         self.worker.queue.put((self.control_handle, self._pack(value)))
